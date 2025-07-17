@@ -1,21 +1,14 @@
 name: CI
-
-on:
-  push:
-    branches:
-      - main
-      - squeeze-alpha-backend
-
+on: push
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
-      - name: Install dependencies
-        run: npm ci
-      - name: Run smoke tests
-        run: ./scripts/smoke-test.sh
+      - run: npm ci
+      - run: chmod +x scripts/smoke-test.sh
+      - run: ./scripts/smoke-test.sh
