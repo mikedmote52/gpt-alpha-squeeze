@@ -1,33 +1,16 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { getAlpacaClient } from './client';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import alpaca from './client';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Only POST allowed' });
   }
-
-  const { symbol, qty, side, type = 'market', time_in_force = 'day' } = req.body;
-
-  if (!symbol || !qty || !side) {
-    return res.status(400).json({ error: 'Missing required fields: symbol, qty, side' });
-  }
-
+  const { symbol, qty, side, type, time_in_force } = req.body;
   try {
-    const alpaca = getAlpacaClient();
-    const order = await alpaca.createOrder({
-      symbol,
-      qty,
-      side,
-      type,
-      time_in_force,
-    });
-
+    const order = await alpaca.createOrder({ symbol, qty, side, type, time_in_force });
     res.status(200).json(order);
-  } catch (error) {
-    console.error('Alpaca order error:', error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to create order' });
   }
 }
