@@ -206,7 +206,10 @@ export async function screenSqueezers(
       const shortStats = data.shortStats;
       const symbol = data.symbol;
 
-      if (!quote || !shortStats) continue;
+      if (!quote || !shortStats || !symbol) {
+        console.warn(`Missing data for screening:`, { symbol, hasQuote: !!quote, hasShortStats: !!shortStats });
+        continue;
+      }
 
       // Calculate traditional squeeze score
       let score = 0;

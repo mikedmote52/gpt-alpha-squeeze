@@ -74,9 +74,11 @@ async function analyzeSqueezeOpportunities(tickers: string[]) {
     const rawData = await Promise.all(
       tickers.map(async sym => {
         try {
-          const quote = await getQuote(sym);
-          const shortStats = await getShortStats(sym);
-          return { symbol: sym, quote, shortStats };
+          // Ensure sym is a string
+          const symbol = typeof sym === 'string' ? sym : sym.toString();
+          const quote = await getQuote(symbol);
+          const shortStats = await getShortStats(symbol);
+          return { symbol, quote, shortStats };
         } catch (error) {
           console.error(`Error fetching data for ${sym}:`, error);
           return null;

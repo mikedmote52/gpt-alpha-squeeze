@@ -24,6 +24,11 @@ function setCachedData(key: string, data: any) {
 }
 
 export async function getQuote(symbol: string) {
+  if (!symbol || typeof symbol !== 'string') {
+    console.error('Invalid symbol provided to getQuote:', symbol);
+    throw new Error(`Invalid symbol: ${symbol}`);
+  }
+
   const cacheKey = `quote_${symbol}`;
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
