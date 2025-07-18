@@ -33,8 +33,8 @@ export default function EnhancedDashboard() {
   }, [positions]);
 
   const calculateMetrics = () => {
-    const totalValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || 0), 0);
-    const totalPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || 0), 0);
+    const totalValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || '0'), 0);
+    const totalPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || '0'), 0);
     const totalPnLPercent = totalValue > 0 ? (totalPnL / (totalValue - totalPnL)) * 100 : 0;
 
     setMetrics(prev => ({
@@ -211,12 +211,12 @@ export default function EnhancedDashboard() {
               <div className="space-y-4">
                 {positions.map((position) => {
                   const squeezeScore = getSqueezeScore(position.symbol);
-                  const pnlPercent = parseFloat(position.unrealized_plpc || 0) * 100;
-                  const pnlAmount = parseFloat(position.unrealized_pl || 0);
-                  const marketValue = parseFloat(position.market_value || 0);
-                  const quantity = parseFloat(position.qty || 0);
-                  const avgPrice = parseFloat(position.avg_entry_price || 0);
-                  const currentPrice = parseFloat(position.current_price || 0);
+                  const pnlPercent = parseFloat(position.unrealized_plpc || '0') * 100;
+                  const pnlAmount = parseFloat(position.unrealized_pl || '0');
+                  const marketValue = parseFloat(position.market_value || '0');
+                  const quantity = parseFloat(position.qty || '0');
+                  const avgPrice = parseFloat((position as any).avg_entry_price || '0');
+                  const currentPrice = parseFloat((position as any).current_price || '0');
                   const candidate = metrics.candidates.find(c => c.symbol === position.symbol);
 
                   return (

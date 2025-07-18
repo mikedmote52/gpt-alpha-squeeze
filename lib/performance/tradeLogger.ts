@@ -98,7 +98,7 @@ class TradeLogger {
     let winningTrades = 0;
 
     for (const symbol in symbolTrades) {
-      const symbolTradeList = symbolTrades[symbol].sort((a, b) => 
+      const symbolTradeList = symbolTrades[symbol].sort((a: any, b: any) => 
         new Date(a.execution_time).getTime() - new Date(b.execution_time).getTime()
       );
 

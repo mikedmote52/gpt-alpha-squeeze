@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       
       // Track recommendation in learning system
-      await learningSystem.saveRecommendation({
+      await learningSystem.memorySystem.saveRecommendation({
         session_id: session_id || 'trading_session',
         recommendation_type: side as 'buy' | 'sell',
         symbol: symbol,

@@ -108,8 +108,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     const orders = await alpaca.getOrders({
       status: 'filled',
+      until: null,
       after: oneDayAgo.toISOString(),
-      direction: 'desc'
+      limit: 500,
+      direction: 'desc',
+      nested: true,
+      symbols: null
     });
 
     let newTradesLogged = 0;

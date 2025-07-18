@@ -102,17 +102,17 @@ export default function PerformancePage() {
                   <div>
                     <h4 className="font-medium mb-2 text-red-600">Critical Alerts</h4>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• Daily loss > 10%</li>
-                      <li>• Max drawdown > 20%</li>
-                      <li>• Portfolio value drop > 15%</li>
+                      <li>• Daily loss &gt; 10%</li>
+                      <li>• Max drawdown &gt; 20%</li>
+                      <li>• Portfolio value drop &gt; 15%</li>
                     </ul>
                   </div>
                   <div>
                     <h4 className="font-medium mb-2 text-yellow-600">Performance Alerts</h4>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• Sharpe ratio < 0.5</li>
+                      <li>• Sharpe ratio &lt; 0.5</li>
                       <li>• Negative excess returns</li>
-                      <li>• High volatility > 40%</li>
+                      <li>• High volatility &gt; 40%</li>
                     </ul>
                   </div>
                 </div>

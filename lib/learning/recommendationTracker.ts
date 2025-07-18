@@ -131,7 +131,7 @@ class RecommendationTracker {
     const extremeVolatility = data.max_price && data.min_price && 
       (data.max_price - data.min_price) / data.entry_price >= 0.20; // 20% volatility
     
-    return significantMove || longHold || extremeVolatility;
+    return !!(significantMove || longHold || extremeVolatility);
   }
 
   // Close tracking and record outcome

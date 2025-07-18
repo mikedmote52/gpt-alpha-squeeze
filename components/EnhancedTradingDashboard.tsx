@@ -100,8 +100,8 @@ export default function EnhancedTradingDashboard() {
           portfolioData: {
             positions,
             candidates: data.candidates || [],
-            totalValue: positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || 0), 0),
-            totalPnL: positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || 0), 0),
+            totalValue: positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || '0'), 0),
+            totalPnL: positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || '0'), 0),
             learningStatus: data.learning_status || {}
           }
         }));

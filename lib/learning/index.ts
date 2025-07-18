@@ -16,7 +16,7 @@ export { outcomeTracker } from './outcomeTracker';
 
 // Central Learning System Manager
 export class LearningSystemManager {
-  private memorySystem: AIMemorySystem;
+  public memorySystem: AIMemorySystem;
   private adaptiveScoring: AdaptiveScoringSystem;
   private patternEngine: PatternRecognitionEngine;
   private recommendationTracker: RecommendationTracker;

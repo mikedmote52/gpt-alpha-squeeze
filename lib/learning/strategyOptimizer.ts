@@ -186,7 +186,9 @@ class StrategyOptimizer {
     };
     
     patterns.forEach(pattern => {
-      distribution[pattern.pattern_type]++;
+      if (pattern.pattern_type in distribution) {
+        distribution[pattern.pattern_type as keyof typeof distribution]++;
+      }
     });
     
     return distribution;
