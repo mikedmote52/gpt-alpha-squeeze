@@ -59,7 +59,7 @@ When the user asks, you should:
     let apiUsed = 'none';
     
     // Try OpenAI first if available
-    if (openai) {
+    if (openai && false) { // Temporarily disabled due to connection issues
       try {
         console.log('Attempting OpenAI API...');
         chatRes = await openai.chat.completions.create({ 
