@@ -15,7 +15,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!watchlist.length) throw new Error('No tickers provided');
 
     const rawData = await Promise.all(
-      watchlist.map(sym => getQuote(sym).then(q => ({ symbol: sym, quote: q, shortStats: await getShortStats(sym) })))
+      watchlist.map(async sym => {
+        const quote = await getQuote(sym);
+        const shortStats = await getShortStats(sym);
+        return { symbol: sym, quote, shortStats };
+      })
     );
     const candidates = screenSqueezers(rawData, DEFAULT_PARAMS);
 
