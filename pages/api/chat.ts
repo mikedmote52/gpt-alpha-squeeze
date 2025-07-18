@@ -105,12 +105,79 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Extract potential tickers from the message
     const tickerMatches = latestUserMessage.match(/\b[A-Z]{2,5}\b/g) || [];
     const uniqueTickers = Array.from(new Set(tickerMatches));
+    const isAskingAboutPortfolio = /portfolio|holdings|positions|my stocks|what do I own|current positions/i.test(latestUserMessage);
     
-    // Always analyze tickers if present
     let squeezeData = [];
     let contextAddition = '';
     
-    if (uniqueTickers.length > 0) {
+    // If asking about portfolio, get current holdings and analyze them
+    if (isAskingAboutPortfolio) {
+      try {
+        const holdingsResponse = await fetch(`${process.env.ALPACA_API_URL || 'https://paper-api.alpaca.markets'}/v2/positions`, {
+          headers: {
+            'APCA-API-KEY-ID': process.env.ALPACA_KEY_ID || '',
+            'APCA-API-SECRET-KEY': process.env.ALPACA_SECRET_KEY || ''
+          }
+        });
+        
+        if (holdingsResponse.ok) {
+          const positions = await holdingsResponse.json();
+          
+          if (positions.length > 0) {
+            // Analyze each holding for squeeze potential
+            const holdingSymbols = positions.map((pos: any) => pos.symbol);
+            const holdingAnalysis = await analyzeSqueezeOpportunities(holdingSymbols);
+            
+            // Calculate portfolio metrics
+            const totalValue = positions.reduce((sum: number, pos: any) => sum + parseFloat(pos.market_value || 0), 0);
+            const totalGainLoss = positions.reduce((sum: number, pos: any) => sum + parseFloat(pos.unrealized_pl || 0), 0);
+            const avgScore = holdingAnalysis.length > 0 ? 
+              holdingAnalysis.reduce((sum, h) => sum + (h.score || 0), 0) / holdingAnalysis.length : 0;
+            
+            // Create detailed portfolio analysis
+            const portfolioAnalysis = positions.map((pos: any) => {
+              const analysis = holdingAnalysis.find(h => h.symbol === pos.symbol);
+              const score = analysis?.score || 0;
+              const recommendation = score >= 75 ? 'STRONG SQUEEZE CANDIDATE' : 
+                                   score >= 50 ? 'MODERATE POTENTIAL' : 
+                                   score >= 25 ? 'LOW SQUEEZE RISK' : 'MINIMAL SQUEEZE ACTIVITY';
+              
+              return `
+${pos.symbol}:
+- Position: ${pos.qty} shares @ $${parseFloat(pos.avg_cost || 0).toFixed(2)}
+- Current Value: $${parseFloat(pos.market_value || 0).toFixed(2)}
+- P&L: $${parseFloat(pos.unrealized_pl || 0).toFixed(2)} (${parseFloat((pos.unrealized_plpc || 0) * 100).toFixed(1)}%)
+- Squeeze Score: ${score}/100
+- Assessment: ${recommendation}
+- Short Interest: ${analysis?.shortInt || 0}%
+- Days to Cover: ${analysis?.daysToCover || 0}`;
+            }).join('\n\n');
+            
+            contextAddition = `\n\nCURRENT PORTFOLIO ANALYSIS:
+Total Portfolio Value: $${totalValue.toFixed(2)}
+Total P&L: $${totalGainLoss.toFixed(2)}
+Average Squeeze Score: ${avgScore.toFixed(1)}/100
+Number of Positions: ${positions.length}
+
+INDIVIDUAL HOLDINGS ANALYSIS:
+${portfolioAnalysis}
+
+Use this data to provide comprehensive portfolio analysis including squeeze potential, risk assessment, and strategic recommendations for each holding.`;
+            
+            squeezeData = holdingAnalysis;
+          } else {
+            contextAddition = '\n\nPortfolio Status: No current positions found. User has no holdings to analyze.';
+          }
+        } else {
+          contextAddition = '\n\nPortfolio Status: Unable to fetch current holdings. Please ensure Alpaca API credentials are configured.';
+        }
+      } catch (error) {
+        console.error('Error fetching portfolio:', error);
+        contextAddition = '\n\nPortfolio Status: Error accessing portfolio data. Please check API configuration.';
+      }
+    }
+    // If asking about specific tickers, analyze them
+    else if (uniqueTickers.length > 0) {
       console.log('Analyzing tickers:', uniqueTickers);
       const candidates = await analyzeSqueezeOpportunities(uniqueTickers);
       
