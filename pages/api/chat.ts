@@ -5,6 +5,10 @@ import { getQuote, getShortStats } from '../../lib/marketData';
 import { screenSqueezers } from '../../lib/screener';
 
 const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY!
+});
+
+const openrouter = new OpenAI({ 
   apiKey: process.env.OPENROUTER_API_KEY!,
   baseURL: "https://openrouter.ai/api/v1"
 });
@@ -41,14 +45,27 @@ When the user asks, you should:
 `.trim();
 
     const messages = [{ role:'system', content:systemPrompt }, ...userMessages];
-    const chatRes = await openai.chat.completions.create({ 
-      model:'openai/gpt-4-turbo-preview', 
-      messages,
-      headers: {
-        "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
-        "X-Title": "Squeeze Alpha Trading System"
-      }
-    });
+    
+    let chatRes;
+    try {
+      // Try OpenAI first
+      chatRes = await openai.chat.completions.create({ 
+        model: 'gpt-4-turbo-preview', 
+        messages 
+      });
+    } catch (openaiError) {
+      console.log('OpenAI failed, falling back to OpenRouter:', openaiError);
+      // Fallback to OpenRouter
+      chatRes = await openrouter.chat.completions.create({ 
+        model: 'openai/gpt-4-turbo-preview', 
+        messages,
+        headers: {
+          "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
+          "X-Title": "Squeeze Alpha Trading System"
+        }
+      });
+    }
+    
     res.status(200).json({ candidates, aiReply: chatRes.choices[0].message });
   } catch (err) {
     console.error(err);
