@@ -29,35 +29,14 @@ export async function getQuote(symbol: string) {
   if (cached) return cached;
 
   try {
-    // Try Alpaca first (most reliable for basic quotes)
-    const alpacaUrl = `https://data.alpaca.markets/v2/stocks/${symbol}/quotes/latest`;
-    const alpacaResponse = await fetch(alpacaUrl, {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_SECRET
-      }
-    });
-
-    if (alpacaResponse.ok) {
-      const alpacaData = await alpacaResponse.json();
-      const quote = {
-        symbol,
-        price: alpacaData.quote?.ap || 0,
-        change: 0,
-        changePercent: 0,
-        volume: 0,
-        timestamp: new Date().toISOString()
-      };
-      setCachedData(cacheKey, quote);
-      return quote;
-    }
-
-    // Fallback to FMP
+    // Try FMP first (most complete data)
+    console.log(`Fetching quote for ${symbol} from FMP`);
     const fmpUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${FMP_API_KEY}`;
     const fmpResponse = await fetch(fmpUrl);
     
     if (fmpResponse.ok) {
       const fmpData = await fmpResponse.json();
+      console.log(`FMP response for ${symbol}:`, fmpData);
       const data = fmpData[0];
       
       if (data) {
@@ -73,6 +52,30 @@ export async function getQuote(symbol: string) {
         return quote;
       }
     }
+
+    // Fallback to Alpaca
+    const alpacaUrl = `https://data.alpaca.markets/v2/stocks/${symbol}/quotes/latest`;
+    const alpacaResponse = await fetch(alpacaUrl, {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_SECRET
+      }
+    });
+
+    if (alpacaResponse.ok) {
+      const alpacaData = await alpacaResponse.json();
+      const quote = {
+        symbol,
+        price: alpacaData.quote?.ap || alpacaData.quote?.bp || 0,
+        change: 0,
+        changePercent: 0,
+        volume: 0,
+        timestamp: new Date().toISOString()
+      };
+      setCachedData(cacheKey, quote);
+      return quote;
+    }
+
 
     // Fallback to Alpha Vantage
     const avUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHAVANTAGE_API_KEY}`;

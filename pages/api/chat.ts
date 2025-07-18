@@ -2,7 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
 import { getQuote, getShortStats } from '../../lib/marketData';
-import { screenSqueezers } from '../../lib/screener';
+import { screenSqueezers } from '../../lib/enhancedScreener';
+import { learningSystem } from '../../lib/learning';
 
 // Initialize API clients with error checking
 const openaiKey = process.env.OPENAI_API_KEY;
@@ -84,7 +85,9 @@ async function analyzeSqueezeOpportunities(tickers: string[]) {
     );
     
     const validData = rawData.filter(d => d !== null);
-    return screenSqueezers(validData, DEFAULT_PARAMS);
+    
+    // Use enhanced screener with learning system
+    return await screenSqueezers(validData, DEFAULT_PARAMS);
   } catch (error) {
     console.error('Error analyzing squeeze opportunities:', error);
     return [];
@@ -99,8 +102,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error('No messages provided');
     }
     
-    // Get the latest user message
+    // Get session ID from request headers or generate new one
+    const sessionId = req.headers['x-session-id'] as string || learningSystem.startNewSession();
+    
+    // Save user message to learning system
     const latestUserMessage = userMessages[userMessages.length - 1]?.content || '';
+    await learningSystem.saveConversationWithInsights(latestUserMessage, 'user', sessionId);
+    
+    // Get conversation context from learning system
+    const conversationContext = await learningSystem.getConversationContext(sessionId);
     
     // Extract potential tickers from the message
     const tickerMatches = latestUserMessage.match(/\b[A-Z]{2,5}\b/g) || [];
@@ -134,23 +144,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const avgScore = holdingAnalysis.length > 0 ? 
               holdingAnalysis.reduce((sum, h) => sum + (h.score || 0), 0) / holdingAnalysis.length : 0;
             
-            // Create detailed portfolio analysis
+            // Create detailed portfolio analysis with enhanced data
             const portfolioAnalysis = positions.map((pos: any) => {
               const analysis = holdingAnalysis.find(h => h.symbol === pos.symbol);
-              const score = analysis?.score || 0;
+              const score = analysis?.enhanced_score || analysis?.score || 0;
               const recommendation = score >= 75 ? 'STRONG SQUEEZE CANDIDATE' : 
                                    score >= 50 ? 'MODERATE POTENTIAL' : 
                                    score >= 25 ? 'LOW SQUEEZE RISK' : 'MINIMAL SQUEEZE ACTIVITY';
               
               return `
 ${pos.symbol}:
-- Position: ${pos.qty} shares @ $${parseFloat(pos.avg_cost || 0).toFixed(2)}
+- Position: ${pos.qty} shares @ $${parseFloat(pos.avg_entry_price || 0).toFixed(2)}
 - Current Value: $${parseFloat(pos.market_value || 0).toFixed(2)}
 - P&L: $${parseFloat(pos.unrealized_pl || 0).toFixed(2)} (${parseFloat((pos.unrealized_plpc || 0) * 100).toFixed(1)}%)
-- Squeeze Score: ${score}/100
+- Enhanced Score: ${score}/100
 - Assessment: ${recommendation}
-- Short Interest: ${analysis?.shortInt || 0}%
-- Days to Cover: ${analysis?.daysToCover || 0}`;
+- AI Reasoning: ${analysis?.ai_reasoning || 'No analysis available'}
+- Short Interest: ${analysis?.shortInterest ? (analysis.shortInterest * 100).toFixed(1) : 0}%
+- Days to Cover: ${analysis?.daysTocover || 0}
+- Historical Performance: ${analysis?.historical_performance ? 
+  `${analysis.historical_performance.successful_recommendations}/${analysis.historical_performance.total_recommendations} success rate` : 'No history'}`;
             }).join('\n\n');
             
             contextAddition = `\n\nCURRENT PORTFOLIO ANALYSIS:
@@ -206,9 +219,30 @@ ${c.symbol} Analysis:
       }
     }
     
+    // Build enhanced system prompt with learning context
+    const learningContext = `
+
+LEARNING SYSTEM CONTEXT:
+Current Session: ${sessionId}
+Total Conversations: ${conversationContext.system_status.total_conversations}
+Total Recommendations: ${conversationContext.system_status.total_recommendations}
+Active Tracking: ${conversationContext.system_status.active_tracking_count} positions
+
+RECENT PERFORMANCE:
+${conversationContext.recent_recommendations.slice(0, 3).map(r => 
+  `${r.symbol}: ${r.recommendation_type} - ${r.outcome_type || 'tracking'} (${r.outcome_return ? (r.outcome_return * 100).toFixed(1) + '%' : 'pending'})`
+).join('\n')}
+
+STOCK MEMORY:
+${conversationContext.stock_memories.slice(0, 5).map(s => 
+  `${s.symbol}: ${s.successful_recommendations}/${s.total_recommendations} success rate, avg return: ${(s.avg_recommendation_return * 100).toFixed(1)}%`
+).join('\n')}
+
+IMPORTANT: Use this historical context to provide personalized recommendations based on past performance and learning. Reference specific stocks you've recommended before and their outcomes.`;
+
     // Build messages for the AI
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT + contextAddition },
+      { role: 'system', content: SYSTEM_PROMPT + contextAddition + learningContext },
       ...userMessages
     ];
     
@@ -219,8 +253,8 @@ ${c.symbol} Analysis:
     let chatRes;
     let apiUsed = 'none';
     
-    // Try OpenAI first if available (currently disabled due to connection issues)
-    if (openai && false) {
+    // Try OpenAI first if available
+    if (openai) {
       try {
         console.log('Attempting OpenAI API...');
         chatRes = await openai.chat.completions.create({ 
@@ -260,10 +294,33 @@ ${c.symbol} Analysis:
     
     console.log(`Successfully used ${apiUsed} API`);
     
-    // Return response with squeeze data
+    // Save assistant's response to learning system
+    const assistantMessage = chatRes!.choices[0].message.content;
+    await learningSystem.saveConversationWithInsights(
+      assistantMessage,
+      'assistant',
+      sessionId,
+      {
+        market_conditions: squeezeData.length > 0 ? {
+          analyzed_symbols: squeezeData.map(s => s.symbol),
+          squeeze_scores: squeezeData.map(s => s.enhanced_score || s.score),
+          avg_score: squeezeData.reduce((sum, s) => sum + (s.enhanced_score || s.score || 0), 0) / Math.max(1, squeezeData.length)
+        } : null,
+        api_used: apiUsed,
+        processing_time: Date.now()
+      }
+    );
+    
+    // Return response with squeeze data and learning context
     const response: any = {
       aiReply: chatRes!.choices[0].message,
-      message: chatRes!.choices[0].message.content // For compatibility
+      message: chatRes!.choices[0].message.content, // For compatibility
+      sessionId: sessionId,
+      learning_status: {
+        total_conversations: conversationContext.system_status.total_conversations + 1,
+        active_tracking: conversationContext.system_status.active_tracking_count,
+        system_learning: true
+      }
     };
     
     if (squeezeData.length > 0) {
