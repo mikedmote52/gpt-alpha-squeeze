@@ -23,7 +23,7 @@ export function useChat() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ history: updatedHistory }),
+        body: JSON.stringify({ messages: updatedHistory }),
       });
 
       if (!response.ok) {
@@ -31,7 +31,7 @@ export function useChat() {
       }
 
       const data = await response.json();
-      const assistantMessage: Message = { role: 'assistant', content: data.assistant };
+      const assistantMessage: Message = { role: 'assistant', content: data.aiReply?.content || data.message || 'Sorry, I could not process your request.' };
       setMessages([...updatedHistory, assistantMessage]);
     } catch (error) {
       console.error('Chat error:', error);

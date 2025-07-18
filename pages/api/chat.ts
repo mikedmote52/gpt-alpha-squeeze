@@ -17,39 +17,73 @@ const openrouter = openrouterKey ? new OpenAI({
   apiKey: openrouterKey,
   baseURL: "https://openrouter.ai/api/v1"
 }) : null;
+
 const DEFAULT_PARAMS = { minShortInt:30, minDaysToCover:7, minBorrowRate:15, minScore:80 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  try {
-    const userMessages = (req.body.messages || []) as { role:string; content:string }[];
-    const watchlist = (req.body.watchlist as string[] | undefined)
-      ?? Array.from(new Set((userMessages.slice(-1)[0]?.content.match(/\b[A-Z]{2,5}\b/g)||[])));
-    if (!watchlist.length) throw new Error('No tickers provided');
+// System prompt for general trading assistant
+const SYSTEM_PROMPT = `You are Squeeze Alpha, an advanced AI trading assistant specializing in stock market analysis, trading strategies, and investment advice. You have expertise in:
 
+- Technical and fundamental analysis
+- Short squeeze identification and analysis
+- Risk management and portfolio optimization
+- Market trends and sentiment analysis
+- Options trading strategies
+- Day trading and swing trading techniques
+
+You can help with any trading-related questions, from beginner concepts to advanced strategies. When users mention specific stock tickers, you can analyze them for short squeeze potential if requested. Be helpful, informative, and provide actionable insights while always reminding users to do their own research and consider their risk tolerance.`;
+
+async function analyzeSqueezeOpportunities(tickers: string[]) {
+  try {
     const rawData = await Promise.all(
-      watchlist.map(async sym => {
+      tickers.map(async sym => {
         const quote = await getQuote(sym);
         const shortStats = await getShortStats(sym);
         return { symbol: sym, quote, shortStats };
       })
     );
-    const candidates = screenSqueezers(rawData, DEFAULT_PARAMS);
+    return screenSqueezers(rawData, DEFAULT_PARAMS);
+  } catch (error) {
+    console.error('Error analyzing squeeze opportunities:', error);
+    return [];
+  }
+}
 
-    const tableText = candidates.map(c =>
-      `${c.symbol} — SI ${c.shortInt}% • DTC ${c.daysToCover}d • Borrow ${c.borrowRate}% • Score ${c.score}`
-    ).join('\n');
-    const systemPrompt = `
-You are Squeeze Alpha, an elite short‐squeeze analyst.
-Here's your current top squeeze snapshot:
-${tableText}
-
-When the user asks, you should:
- • Explain why each candidate scored where it did
- • Suggest fresh tickers to add
- • Give precise entry/exit levels and risk steps
-`.trim();
-
-    const messages = [{ role:'system', content:systemPrompt }, ...userMessages];
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const userMessages = (req.body.messages || []) as { role:string; content:string }[];
+    
+    if (!userMessages.length) {
+      throw new Error('No messages provided');
+    }
+    
+    // Get the latest user message
+    const latestUserMessage = userMessages[userMessages.length - 1]?.content || '';
+    
+    // Check if user is asking about specific tickers or squeeze analysis
+    const tickerMatches = latestUserMessage.match(/\b[A-Z]{2,5}\b/g) || [];
+    const uniqueTickers = Array.from(new Set(tickerMatches));
+    const isAskingAboutSqueeze = /squeeze|short|shorted|borrow|days to cover/i.test(latestUserMessage);
+    
+    // Only analyze tickers if user is asking about squeeze potential
+    let squeezeData = null;
+    let contextAddition = '';
+    
+    if (uniqueTickers.length > 0 && isAskingAboutSqueeze) {
+      const candidates = await analyzeSqueezeOpportunities(uniqueTickers);
+      if (candidates.length > 0) {
+        squeezeData = candidates;
+        const tableText = candidates.map(c =>
+          `${c.symbol} — SI ${c.shortInt}% • DTC ${c.daysToCover}d • Borrow ${c.borrowRate}% • Score ${c.score}`
+        ).join('\n');
+        contextAddition = `\n\nCurrent squeeze analysis for requested tickers:\n${tableText}`;
+      }
+    }
+    
+    // Build messages for the AI
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT + contextAddition },
+      ...userMessages
+    ];
     
     if (!openai && !openrouter) {
       throw new Error('No AI API configured. Please set OPENAI_API_KEY or OPENROUTER_API_KEY in environment variables.');
@@ -58,8 +92,8 @@ When the user asks, you should:
     let chatRes;
     let apiUsed = 'none';
     
-    // Try OpenAI first if available
-    if (openai && false) { // Temporarily disabled due to connection issues
+    // Try OpenAI first if available (currently disabled due to connection issues)
+    if (openai && false) {
       try {
         console.log('Attempting OpenAI API...');
         chatRes = await openai.chat.completions.create({ 
@@ -75,7 +109,7 @@ When the user asks, you should:
       }
     }
     
-    // Try OpenRouter as fallback or primary if OpenAI not available
+    // Try OpenRouter as fallback or primary
     if (!chatRes && openrouter) {
       try {
         console.log('Attempting OpenRouter API...');
@@ -94,9 +128,23 @@ When the user asks, you should:
     }
     
     console.log(`Successfully used ${apiUsed} API`);
-    res.status(200).json({ candidates, aiReply: chatRes!.choices[0].message });
+    
+    // Return response with optional squeeze data
+    const response: any = {
+      aiReply: chatRes!.choices[0].message,
+      message: chatRes!.choices[0].message.content // For compatibility
+    };
+    
+    if (squeezeData) {
+      response.candidates = squeezeData;
+    }
+    
+    res.status(200).json(response);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error:(err as Error).message });
+    console.error('Chat API Error:', err);
+    res.status(500).json({ 
+      error: (err as Error).message,
+      aiReply: { content: 'Sorry, I encountered an error. Please try again.' }
+    });
   }
 }
