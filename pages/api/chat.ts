@@ -18,30 +18,73 @@ const openrouter = openrouterKey ? new OpenAI({
   baseURL: "https://openrouter.ai/api/v1"
 }) : null;
 
-const DEFAULT_PARAMS = { minShortInt:30, minDaysToCover:7, minBorrowRate:15, minScore:80 };
+const DEFAULT_PARAMS = { minShortInt:20, minDaysToCover:3, minBorrowRate:50, minScore:75 };
 
-// System prompt for general trading assistant
-const SYSTEM_PROMPT = `You are Squeeze Alpha, an advanced AI trading assistant specializing in stock market analysis, trading strategies, and investment advice. You have expertise in:
+// System prompt for AlphaStack Squeeze Commander
+const SYSTEM_PROMPT = `You are AlphaStack Squeeze Commander — a purpose-built GPT trader that autonomously scans for the highest-probability short-squeeze setups, scores them with our proprietary model, and executes disciplined bracket orders under strict risk and capital-control rules.
 
-- Technical and fundamental analysis
-- Short squeeze identification and analysis
-- Risk management and portfolio optimization
-- Market trends and sentiment analysis
-- Options trading strategies
-- Day trading and swing trading techniques
+Your Multi-Dimensional Squeeze Scanner analyzes:
 
-You can help with any trading-related questions, from beginner concepts to advanced strategies. When users mention specific stock tickers, you can analyze them for short squeeze potential if requested. Be helpful, informative, and provide actionable insights while always reminding users to do their own research and consider their risk tolerance.`;
+1. **Short Interest & Float Dynamics**
+   - Short Interest % of Float (SI%): Target ≥ 20% (especially > 50%)
+   - Float Size: Ultra-low floats (< 50M shares) amplify forced buy-ins
+
+2. **Days-to-Cover (DTC)**
+   - Calculated as (Total Shares Short) ÷ (Average Daily Volume)
+   - Targets with DTC ≤ 3 days can ignite rapid feedback loops
+
+3. **Borrow Cost & Availability**
+   - Borrow Fee Rate (APR): Higher costs (> 50% APR) = more pain for shorts
+   - Locate Availability: Tight borrow availability → higher risk of recalls
+
+4. **Liquidity & Volume Spikes**
+   - Unusual Volume: ≥ 2× average daily volume signals institutional/retail interest
+   - VWAP & Moving Averages: Price pushing through key levels with expanding volume
+
+5. **Options Activity**
+   - O/I Concentration: Big open interest in near-dated calls
+   - Skew & IV: Rising IV indicates traders pricing in bigger moves
+
+6. **Fundamental & News Catalysts**
+   - Corporate Events: Earnings beats, FDA filings, M&A rumors
+   - Analyst Upgrades/Media Mentions: High-traffic coverage can light the fuse
+
+7. **Technical Set-Ups**
+   - Breakout Patterns: Cup-and-handle, bull flags, wedge breakouts
+   - Relative Strength: RS > 80 on 14-day RSI indicates strong momentum
+
+8. **Risk & Position Sizing Filters**
+   - Price > $5 to avoid sub-$5 volatility
+   - Sector Caps: Max 40% in one sector
+   - Max Position: $900 or 15% of total capital per trade
+   - Stop-Loss: Hard 10% stop on every entry
+
+**Proprietary Squeeze Score Weighting (0-100):**
+- SI % & DTC: 40%
+- Borrow Rate & Availability: 20%
+- Volume & Technicals: 15%
+- Options Flow & IV Skew: 15%
+- Catalyst Potential: 10%
+
+Tickers scoring > 75 enter the "Short Squeeze Watchlist" for execution tracking.`;
 
 async function analyzeSqueezeOpportunities(tickers: string[]) {
   try {
     const rawData = await Promise.all(
       tickers.map(async sym => {
-        const quote = await getQuote(sym);
-        const shortStats = await getShortStats(sym);
-        return { symbol: sym, quote, shortStats };
+        try {
+          const quote = await getQuote(sym);
+          const shortStats = await getShortStats(sym);
+          return { symbol: sym, quote, shortStats };
+        } catch (error) {
+          console.error(`Error fetching data for ${sym}:`, error);
+          return null;
+        }
       })
     );
-    return screenSqueezers(rawData, DEFAULT_PARAMS);
+    
+    const validData = rawData.filter(d => d !== null);
+    return screenSqueezers(validData, DEFAULT_PARAMS);
   } catch (error) {
     console.error('Error analyzing squeeze opportunities:', error);
     return [];
@@ -59,23 +102,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get the latest user message
     const latestUserMessage = userMessages[userMessages.length - 1]?.content || '';
     
-    // Check if user is asking about specific tickers or squeeze analysis
+    // Extract potential tickers from the message
     const tickerMatches = latestUserMessage.match(/\b[A-Z]{2,5}\b/g) || [];
     const uniqueTickers = Array.from(new Set(tickerMatches));
-    const isAskingAboutSqueeze = /squeeze|short|shorted|borrow|days to cover/i.test(latestUserMessage);
     
-    // Only analyze tickers if user is asking about squeeze potential
-    let squeezeData = null;
+    // Always analyze tickers if present
+    let squeezeData = [];
     let contextAddition = '';
     
-    if (uniqueTickers.length > 0 && isAskingAboutSqueeze) {
+    if (uniqueTickers.length > 0) {
+      console.log('Analyzing tickers:', uniqueTickers);
       const candidates = await analyzeSqueezeOpportunities(uniqueTickers);
+      
       if (candidates.length > 0) {
         squeezeData = candidates;
-        const tableText = candidates.map(c =>
-          `${c.symbol} — SI ${c.shortInt}% • DTC ${c.daysToCover}d • Borrow ${c.borrowRate}% • Score ${c.score}`
-        ).join('\n');
-        contextAddition = `\n\nCurrent squeeze analysis for requested tickers:\n${tableText}`;
+        
+        // Create detailed analysis table
+        const detailedAnalysis = candidates.map(c => {
+          const score = c.score || 0;
+          const recommendation = score >= 75 ? 'HIGH PRIORITY - WATCHLIST' : 
+                                score >= 50 ? 'MODERATE - MONITOR' : 
+                                'LOW - PASS';
+          
+          return `
+${c.symbol} Analysis:
+- Short Interest: ${c.shortInt}% of float
+- Days to Cover: ${c.daysToCover} days
+- Borrow Rate: ${c.borrowRate}% APR
+- Squeeze Score: ${score}/100
+- Recommendation: ${recommendation}`;
+        }).join('\n\n');
+        
+        contextAddition = `\n\nLive Squeeze Analysis Results:\n${detailedAnalysis}\n\nUse this data to provide specific trading recommendations based on our proprietary scoring model.`;
+      } else if (uniqueTickers.length > 0) {
+        contextAddition = '\n\nNote: Unable to fetch complete squeeze data for some tickers. Provide analysis based on available information and general market knowledge.';
       }
     }
     
@@ -98,7 +158,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('Attempting OpenAI API...');
         chatRes = await openai.chat.completions.create({ 
           model: 'gpt-4-turbo-preview', 
-          messages 
+          messages,
+          temperature: 0.7,
+          max_tokens: 1000
         });
         apiUsed = 'openai';
       } catch (openaiError: any) {
@@ -116,9 +178,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         chatRes = await openrouter.chat.completions.create({ 
           model: 'openai/gpt-4-turbo-preview', 
           messages,
+          temperature: 0.7,
+          max_tokens: 1000,
           headers: {
             "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
-            "X-Title": "Squeeze Alpha Trading System"
+            "X-Title": "AlphaStack Squeeze Commander"
           }
         });
         apiUsed = 'openrouter';
@@ -129,13 +193,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     console.log(`Successfully used ${apiUsed} API`);
     
-    // Return response with optional squeeze data
+    // Return response with squeeze data
     const response: any = {
       aiReply: chatRes!.choices[0].message,
       message: chatRes!.choices[0].message.content // For compatibility
     };
     
-    if (squeezeData) {
+    if (squeezeData.length > 0) {
       response.candidates = squeezeData;
     }
     
@@ -144,7 +208,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Chat API Error:', err);
     res.status(500).json({ 
       error: (err as Error).message,
-      aiReply: { content: 'Sorry, I encountered an error. Please try again.' }
+      aiReply: { content: 'Sorry, I encountered an error analyzing the squeeze opportunities. Please try again.' }
     });
   }
 }
