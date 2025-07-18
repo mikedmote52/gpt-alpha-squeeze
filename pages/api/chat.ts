@@ -4,14 +4,19 @@ import OpenAI from 'openai';
 import { getQuote, getShortStats } from '../../lib/marketData';
 import { screenSqueezers } from '../../lib/screener';
 
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY!
-});
+// Initialize API clients with error checking
+const openaiKey = process.env.OPENAI_API_KEY;
+const openrouterKey = process.env.OPENROUTER_API_KEY;
 
-const openrouter = new OpenAI({ 
-  apiKey: process.env.OPENROUTER_API_KEY!,
+if (!openaiKey && !openrouterKey) {
+  console.error('No API keys found. Please set OPENAI_API_KEY or OPENROUTER_API_KEY');
+}
+
+const openai = openaiKey ? new OpenAI({ apiKey: openaiKey }) : null;
+const openrouter = openrouterKey ? new OpenAI({ 
+  apiKey: openrouterKey,
   baseURL: "https://openrouter.ai/api/v1"
-});
+}) : null;
 const DEFAULT_PARAMS = { minShortInt:30, minDaysToCover:7, minBorrowRate:15, minScore:80 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,27 +51,50 @@ When the user asks, you should:
 
     const messages = [{ role:'system', content:systemPrompt }, ...userMessages];
     
-    let chatRes;
-    try {
-      // Try OpenAI first
-      chatRes = await openai.chat.completions.create({ 
-        model: 'gpt-4-turbo-preview', 
-        messages 
-      });
-    } catch (openaiError) {
-      console.log('OpenAI failed, falling back to OpenRouter:', openaiError);
-      // Fallback to OpenRouter
-      chatRes = await openrouter.chat.completions.create({ 
-        model: 'openai/gpt-4-turbo-preview', 
-        messages,
-        headers: {
-          "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
-          "X-Title": "Squeeze Alpha Trading System"
-        }
-      });
+    if (!openai && !openrouter) {
+      throw new Error('No AI API configured. Please set OPENAI_API_KEY or OPENROUTER_API_KEY in environment variables.');
     }
     
-    res.status(200).json({ candidates, aiReply: chatRes.choices[0].message });
+    let chatRes;
+    let apiUsed = 'none';
+    
+    // Try OpenAI first if available
+    if (openai) {
+      try {
+        console.log('Attempting OpenAI API...');
+        chatRes = await openai.chat.completions.create({ 
+          model: 'gpt-4-turbo-preview', 
+          messages 
+        });
+        apiUsed = 'openai';
+      } catch (openaiError: any) {
+        console.error('OpenAI API error:', openaiError.message);
+        if (!openrouter) {
+          throw new Error(`OpenAI API failed: ${openaiError.message}`);
+        }
+      }
+    }
+    
+    // Try OpenRouter as fallback or primary if OpenAI not available
+    if (!chatRes && openrouter) {
+      try {
+        console.log('Attempting OpenRouter API...');
+        chatRes = await openrouter.chat.completions.create({ 
+          model: 'openai/gpt-4-turbo-preview', 
+          messages,
+          headers: {
+            "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
+            "X-Title": "Squeeze Alpha Trading System"
+          }
+        });
+        apiUsed = 'openrouter';
+      } catch (openrouterError: any) {
+        throw new Error(`All APIs failed. OpenRouter error: ${openrouterError.message}`);
+      }
+    }
+    
+    console.log(`Successfully used ${apiUsed} API`);
+    res.status(200).json({ candidates, aiReply: chatRes!.choices[0].message });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error:(err as Error).message });
