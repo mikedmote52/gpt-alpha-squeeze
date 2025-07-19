@@ -1,9 +1,68 @@
 import { useState } from 'react';
 import { useChat } from '../hooks/useChat';
+import TradeExecutionButton from './TradeExecutionButton';
 
 export default function ChatWidget() {
   const { messages, loading, sendMessage } = useChat();
   const [input, setInput] = useState('');
+
+  // Parse trade recommendations from AI messages
+  const parseTradeRecommendation = (content: string) => {
+    const buyMatch = content.match(/BUY\s+(\d+)\s+shares?\s+of\s+([A-Z]{2,5})/i);
+    const sellMatch = content.match(/SELL\s+(\d+)\s+shares?\s+of\s+([A-Z]{2,5})/i);
+    
+    if (buyMatch) {
+      return {
+        action: 'BUY' as const,
+        symbol: buyMatch[2],
+        quantity: parseInt(buyMatch[1]),
+        reasoning: content.split('\n')[0] // First line as reasoning
+      };
+    }
+    
+    if (sellMatch) {
+      return {
+        action: 'SELL' as const,
+        symbol: sellMatch[2], 
+        quantity: parseInt(sellMatch[1]),
+        reasoning: content.split('\n')[0] // First line as reasoning
+      };
+    }
+    
+    return null;
+  };
+
+  const handleTradeExecution = async (recommendation: any) => {
+    try {
+      const response = await fetch('/api/alpaca/order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbol: recommendation.symbol,
+          qty: recommendation.quantity,
+          side: recommendation.action.toLowerCase(),
+          type: 'market',
+          time_in_force: 'day',
+          strategy_signal: 'ai_chat_recommendation',
+          strategy_reason: recommendation.reasoning,
+          confidence_score: 0.85
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Trade executed:', result);
+        // Refresh portfolio data or show success message
+      } else {
+        throw new Error('Trade execution failed');
+      }
+    } catch (error) {
+      console.error('Trade execution error:', error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +96,15 @@ export default function ChatWidget() {
                   {message.role === 'user' ? 'You' : 'Squeeze Alpha'}
                 </div>
                 <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.role === 'assistant' && (() => {
+                  const recommendation = parseTradeRecommendation(message.content);
+                  return recommendation ? (
+                    <TradeExecutionButton 
+                      recommendation={recommendation}
+                      onExecute={handleTradeExecution}
+                    />
+                  ) : null;
+                })()}
               </div>
             ))}
             {loading && (

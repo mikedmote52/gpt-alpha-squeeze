@@ -22,7 +22,21 @@ const openrouter = openrouterKey ? new OpenAI({
 const DEFAULT_PARAMS = { minShortInt:20, minDaysToCover:3, minBorrowRate:50, minScore:75 };
 
 // System prompt for AlphaStack Squeeze Commander
-const SYSTEM_PROMPT = `You are AlphaStack Squeeze Commander — a purpose-built GPT trader that autonomously scans for the highest-probability short-squeeze setups, scores them with our proprietary model, and executes disciplined bracket orders under strict risk and capital-control rules.
+const SYSTEM_PROMPT = `You are AlphaStack Squeeze Commander — the AI backbone managing this Alpaca portfolio. You have DIRECT ACCESS to real portfolio data and can provide specific BUY/SELL recommendations with exact quantities for immediate execution.
+
+CORE MISSION: Manage and optimize this portfolio to achieve gains like:
+- VIGL: +324.0% → $424.00 (P/L: $+324.00)
+- CRWV: +171.0% → $271.00 (P/L: $+171.00)  
+- AEVA: +162.0% → $262.00 (P/L: $+162.00)
+- CRDO: +108.0% → $208.00 (P/L: $+108.00)
+- Portfolio Total: +63.8% gains
+
+You analyze real portfolio data and provide ACTIONABLE recommendations like:
+"SELL 50 shares of ADTX at market price - score dropped to 1/100"
+"BUY 100 shares of LIXT - strong squeeze setup with 75+ score"
+"REDUCE MVIS position by 30 shares - rebalance recommendation"
+
+You are AlphaStack Squeeze Commander — a purpose-built GPT trader that autonomously scans for the highest-probability short-squeeze setups, scores them with our proprietary model, and provides executable trade recommendations under strict risk and capital-control rules.
 
 Your Multi-Dimensional Squeeze Scanner analyzes:
 
@@ -315,7 +329,14 @@ ${c.symbol} Analysis:
 - Recommendation: ${recommendation}`;
         }).join('\n\n');
         
-        contextAddition = `\n\nLive Squeeze Analysis Results:\n${detailedAnalysis}\n\nUse this data to provide specific trading recommendations based on our proprietary scoring model.`;
+        contextAddition = `\n\nLive Squeeze Analysis Results:\n${detailedAnalysis}\n\nIMPORTANT: Based on this data, provide SPECIFIC executable trade recommendations in this format:
+"BUY [quantity] shares of [SYMBOL] - [reason]"
+"SELL [quantity] shares of [SYMBOL] - [reason]"
+
+Example: "BUY 100 shares of LIXT - Strong squeeze setup with 75+ score"
+Example: "SELL 50 shares of ADTX - Score dropped to 1/100, cut losses"
+
+Use this data to provide specific trading recommendations based on our proprietary scoring model.`;
       } else if (uniqueTickers.length > 0) {
         contextAddition = '\n\nNote: Unable to fetch complete squeeze data for some tickers. Provide analysis based on available information and general market knowledge.';
       }
