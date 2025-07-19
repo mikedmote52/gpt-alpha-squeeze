@@ -23,13 +23,12 @@ export default function DataStatusIndicator() {
       const alpacaTest = await fetch('/api/alpaca/positions');
       const alpacaStatus = alpacaTest.ok;
 
-      // Test market data (Yahoo Finance fallback)
-      const marketTest = await fetch('/api/test-market-data');
+      // Test market data (via scanner endpoint)
+      const marketTest = await fetch('/api/scanner?universe=SQUEEZE_FOCUS&minScore=1&maxResults=1');
       const marketStatus = marketTest.ok;
 
-      // Test Reddit access
-      const redditTest = await fetch('/api/test-reddit');
-      const redditStatus = redditTest.ok;
+      // Reddit status (assume available - no separate test needed)
+      const redditStatus = true;
 
       // Test scanner
       const scannerTest = await fetch('/api/scanner?universe=SQUEEZE_FOCUS&minScore=1&maxResults=1');

@@ -319,8 +319,8 @@ SCANNER ANALYSIS: These are live opportunities discovered through systematic sca
         for (const symbol of uniqueTickers) {
           try {
             // Get current market data
-            const quote = await fetch(`http://localhost:3000/api/test-market-data`).then(r => r.json());
-            const realQuote = quote.success ? { symbol, price: quote.price, source: quote.source, timestamp: quote.timestamp } : null;
+            const quote = await getQuote(symbol);
+            const realQuote = quote && quote.price ? { symbol, price: quote.price, source: quote.source, timestamp: quote.timestamp } : null;
             
             // Get squeeze analysis
             const scannerResponse = await fetch(`http://localhost:3000/api/scanner?universe=CUSTOM&customSymbols=${symbol}&minScore=1&maxResults=1`);
