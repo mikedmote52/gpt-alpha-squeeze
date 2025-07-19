@@ -86,8 +86,8 @@ Provide specific analysis and recommendations based on this portfolio data.`;
     }
 
     const messages = [
-      { role: 'system', content: PORTFOLIO_SYSTEM_PROMPT + contextAddition },
-      ...userMessages
+      { role: 'system' as const, content: PORTFOLIO_SYSTEM_PROMPT + contextAddition },
+      ...userMessages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
     ];
     
     if (!openai && !openrouter) {
@@ -118,7 +118,8 @@ Provide specific analysis and recommendations based on this portfolio data.`;
           model: 'openai/gpt-4-turbo-preview', 
           messages,
           temperature: 0.7,
-          max_tokens: 1000,
+          max_tokens: 1000
+        }, {
           headers: {
             "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
             "X-Title": "AlphaStack Squeeze Commander"

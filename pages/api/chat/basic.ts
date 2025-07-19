@@ -41,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Build simple messages for AI
     const messages = [
-      { role: 'system', content: BASIC_SYSTEM_PROMPT },
-      ...userMessages
+      { role: 'system' as const, content: BASIC_SYSTEM_PROMPT },
+      ...userMessages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }))
     ];
     
     if (!openai && !openrouter) {
@@ -79,7 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           model: 'openai/gpt-4-turbo-preview', 
           messages,
           temperature: 0.7,
-          max_tokens: 800,
+          max_tokens: 800
+        }, {
           headers: {
             "HTTP-Referer": "https://gpt-alpha-squeeze-2.onrender.com",
             "X-Title": "AlphaStack Squeeze Commander"
