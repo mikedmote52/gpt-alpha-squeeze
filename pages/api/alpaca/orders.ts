@@ -27,7 +27,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const orders = await alpaca.getOrders({
       status: 'all', // Get all orders (pending, filled, canceled, etc.)
       limit: 50,
-      nested: true
+      nested: true,
+      until: null,
+      after: null,
+      direction: 'desc',
+      symbols: null
     });
 
     // Format orders for the UI
@@ -50,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
 
     // Sort by most recent first
-    formattedOrders.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    formattedOrders.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
     res.status(200).json({
       success: true,
