@@ -122,22 +122,52 @@ What would you like to analyze today?`,
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': sessionId
-        },
-        body: JSON.stringify({
-          messages: [
-            ...messages.map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.content })),
-            { role: 'user', content: inputValue }
-          ]
-        })
-      });
+      // Smart endpoint selection with fallback
+      const isPortfolioQuery = /portfolio|holdings|positions|my stocks|what do I own|current positions|analyze.*position/i.test(inputValue);
+      const isScanQuery = /scan|screen|find|opportunities|search|discover|look for|what should I buy|recommend|suggestions/i.test(inputValue);
+      
+      const endpoints = isPortfolioQuery 
+        ? ['/api/chat/portfolio', '/api/chat/basic', '/api/chat']  // Portfolio queries
+        : ['/api/chat/basic', '/api/chat/portfolio', '/api/chat']; // General queries
 
-      if (!response.ok) {
-        throw new Error('Failed to get response');
+      let response: Response | null = null;
+      let lastError: Error | null = null;
+
+      // Try endpoints in order
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Enhanced chat trying: ${endpoint}`);
+          
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-ID': sessionId
+            },
+            body: JSON.stringify({
+              messages: [
+                ...messages.map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.content })),
+                { role: 'user', content: inputValue }
+              ]
+            })
+          });
+
+          if (response.ok) {
+            console.log(`✅ Enhanced chat success with: ${endpoint}`);
+            break; // Success, use this response
+          } else {
+            throw new Error(`${endpoint} returned ${response.status}`);
+          }
+        } catch (error) {
+          console.error(`❌ ${endpoint} failed:`, error);
+          lastError = error as Error;
+          response = null;
+          continue;
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw new Error(lastError?.message || 'All chat endpoints failed');
       }
 
       const data = await response.json();
