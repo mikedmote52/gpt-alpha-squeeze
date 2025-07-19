@@ -19,6 +19,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         order
       );
       
+      // Create stock thesis when trade is executed
+      if (side === 'buy') {
+        try {
+          const thesisResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/thesis/stocks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              symbol: symbol,
+              currentThesis: confidence_score > 0.8 ? 'BULLISH' : 'NEUTRAL',
+              thesisText: strategy_reason || `Position established in ${symbol} based on AI squeeze analysis`,
+              entryReason: strategy_signal || 'AI-identified squeeze opportunity',
+              exitStrategy: `Monitor for ${confidence_score > 0.8 ? '25%' : '15%'} gains or 10% stop loss`,
+              entryPrice: parseFloat(order.filled_avg_price || order.limit_price || '0'),
+              squeezeScore: Math.round((confidence_score || 0.75) * 100),
+              aiGenerated: true
+            })
+          });
+          
+          console.log(`Thesis created for ${symbol} trade:`, thesisResponse.ok);
+        } catch (thesisError) {
+          console.error('Error creating thesis:', thesisError);
+        }
+      }
+      
       // Track recommendation in learning system
       await learningSystem.memorySystem.saveRecommendation({
         session_id: session_id || 'trading_session',

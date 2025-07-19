@@ -149,6 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const uniqueTickers = Array.from(new Set(tickerMatches));
     const isAskingAboutPortfolio = /portfolio|holdings|positions|my stocks|what do I own|current positions/i.test(latestUserMessage);
     const isAskingForScan = /scan|screen|find|opportunities|search|discover|look for|what should I buy|recommend|suggestions|squeeze candidates|best stocks|top picks/i.test(latestUserMessage);
+    const isAskingAboutSpecificStock = /what do you think about|tell me about|analyze|opinion on|thoughts on/i.test(latestUserMessage) && uniqueTickers.length > 0;
     
     let squeezeData = [];
     let contextAddition = '';
@@ -313,6 +314,82 @@ SCANNER ANALYSIS: These are live opportunities discovered through systematic sca
       } catch (error) {
         console.error('Error performing scan:', error);
         contextAddition = '\n\nSCAN STATUS: Error accessing real-time scanner. Providing analysis based on available market data.';
+      }
+    }
+    // If asking about specific stock analysis (like "what do you think about LIXT")
+    else if (isAskingAboutSpecificStock) {
+      try {
+        console.log(`User asking about specific stock analysis for: ${uniqueTickers.join(', ')}`);
+        
+        // Get real-time data for each ticker mentioned
+        const stockAnalyses = [];
+        
+        for (const symbol of uniqueTickers) {
+          try {
+            // Get current market data
+            const quote = await fetch(`http://localhost:3000/api/test-market-data`).then(r => r.json());
+            const realQuote = quote.success ? { symbol, price: quote.price, source: quote.source, timestamp: quote.timestamp } : null;
+            
+            // Get squeeze analysis
+            const scannerResponse = await fetch(`http://localhost:3000/api/scanner?universe=CUSTOM&customSymbols=${symbol}&minScore=1&maxResults=1`);
+            const scannerData = await scannerResponse.json();
+            const opportunity = scannerData.success && scannerData.data.top_opportunities.length > 0 ? 
+              scannerData.data.top_opportunities[0] : null;
+            
+            if (opportunity || realQuote) {
+              stockAnalyses.push({
+                symbol,
+                realTimeData: opportunity || realQuote,
+                analysis: {
+                  price: opportunity?.price || realQuote?.price || 0,
+                  enhanced_score: opportunity?.enhanced_score || 0,
+                  volume: opportunity?.volume || 0,
+                  changePercent: opportunity?.changePercent || 0,
+                  shortInterest: opportunity?.pattern_analysis?.current_metrics?.shortInt || 0,
+                  squeeze_probability: opportunity?.pattern_analysis?.overall_prediction?.squeeze_probability || 0,
+                  ai_reasoning: opportunity?.ai_reasoning || 'No AI analysis available',
+                  confidence_level: opportunity?.confidence_level || 0
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`Error analyzing ${symbol}:`, error);
+          }
+        }
+        
+        if (stockAnalyses.length > 0) {
+          squeezeData = stockAnalyses.map(s => s.realTimeData);
+          
+          // Create detailed real-time analysis context
+          const analysisDetails = stockAnalyses.map(analysis => {
+            const data = analysis.analysis;
+            return `
+REAL-TIME ANALYSIS FOR ${analysis.symbol}:
+- Current Price: $${data.price} (${data.changePercent > 0 ? '+' : ''}${data.changePercent.toFixed(2)}% today)
+- Enhanced Squeeze Score: ${data.enhanced_score}/100
+- Volume: ${data.volume.toLocaleString()} shares
+- Short Interest: ${data.shortInterest}%
+- Squeeze Probability: ${(data.squeeze_probability * 100).toFixed(1)}%
+- AI Analysis: ${data.ai_reasoning}
+- Data Timestamp: ${new Date().toISOString()}
+- Source: Live scanner with Yahoo Finance backup
+
+IMMEDIATE RECOMMENDATION STATUS:
+${data.enhanced_score >= 75 ? `🟢 STRONG BUY CANDIDATE - Score ${data.enhanced_score}/100` :
+  data.enhanced_score >= 50 ? `🟡 MODERATE WATCH - Score ${data.enhanced_score}/100` :
+  data.enhanced_score >= 25 ? `🟠 LOW PRIORITY - Score ${data.enhanced_score}/100` :
+  `🔴 AVOID - Score ${data.enhanced_score}/100`}`;
+          }).join('\n\n');
+          
+          contextAddition = `\n\nREAL-TIME STOCK ANALYSIS:\n${analysisDetails}\n\nIMPORTANT: Use ONLY this real-time data to provide your analysis. DO NOT use any historical or cached information. Provide specific actionable recommendations based on these current metrics.`;
+          
+          console.log(`Real-time analysis completed for ${uniqueTickers.join(', ')}`);
+        } else {
+          contextAddition = `\n\nREAL-TIME DATA UNAVAILABLE: Could not fetch current market data for ${uniqueTickers.join(', ')}. Please try again or check if the symbols are valid.`;
+        }
+      } catch (error) {
+        console.error('Error performing specific stock analysis:', error);
+        contextAddition = `\n\nANALYSIS ERROR: Failed to fetch real-time data for ${uniqueTickers.join(', ')}. System may be experiencing connectivity issues.`;
       }
     }
     // If asking about specific tickers, analyze them
