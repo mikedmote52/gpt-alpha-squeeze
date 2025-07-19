@@ -8,6 +8,7 @@ import PortfolioHealthDashboard from '../components/PortfolioHealthDashboard';
 import StockThesisCard from '../components/StockThesisCard';
 import OrderConfirmationDialog from '../components/OrderConfirmationDialog';
 import OrderStatusNotification from '../components/OrderStatusNotification';
+import OrderStatusTable from '../components/OrderStatusTable';
 import PortfolioOptimizationModal from '../components/PortfolioOptimizationModal';
 import { useAlpaca } from '../hooks/useAlpaca';
 import { AIRecommendation, StockThesis, PortfolioHealth } from '../types/recommendations';
@@ -447,6 +448,11 @@ export default function EnhancedPortfolio() {
             </div>
 
             {/* Learning Context Display */}
+            {/* Order Status Table */}
+            <div className="mt-8">
+              <OrderStatusTable />
+            </div>
+
             <div className="mt-8 bg-blue-50 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-blue-900 mb-3">🧠 AI Learning System</h3>
               <p className="text-blue-800">
