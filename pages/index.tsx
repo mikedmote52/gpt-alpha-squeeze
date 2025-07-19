@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import ChatWidget from '../components/ChatWidget';
+import ChatRedirect from '../components/ChatRedirect';
 import AIIntelligenceStatus from '../components/AIIntelligenceStatus';
 import PortfolioHealthCard from '../components/PortfolioHealthCard';
 import TopAIRecommendation from '../components/TopAIRecommendation';
@@ -97,7 +97,7 @@ export default function Home() {
               </div>
             </div>
             
-            <ChatWidget />
+            <ChatRedirect />
           </div>
         </div>
       </main>
