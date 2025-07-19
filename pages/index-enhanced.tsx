@@ -40,10 +40,18 @@ export default function EnhancedHome() {
 
   const fetchQuickInsights = async () => {
     try {
-      const response = await fetch('/api/recommendations');
+      // Add cache-busting timestamp
+      const timestamp = Date.now();
+      const response = await fetch(`/api/recommendations?t=${timestamp}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
+          console.log('Index-enhanced portfolio health:', data.portfolioHealth?.overallScore);
           setPortfolioHealth(data.portfolioHealth);
           setActiveRecommendations(data.recommendations.filter((r: AIRecommendation) => r.status === 'ACTIVE'));
         }
@@ -92,6 +100,18 @@ export default function EnhancedHome() {
         {/* Quick Portfolio Overview */}
         {!loading && portfolioHealth && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Portfolio Quick View</h3>
+              <button
+                onClick={() => {
+                  fetchQuickInsights();
+                  fetchRealPortfolioData();
+                }}
+                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                🔄 Refresh
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Portfolio Health Score */}
               <div className="text-center">

@@ -59,7 +59,14 @@ export default function EnhancedPortfolio() {
   const fetchRecommendations = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/recommendations');
+      // Add cache-busting timestamp  
+      const timestamp = Date.now();
+      const response = await fetch(`/api/recommendations?t=${timestamp}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch recommendations');
@@ -68,6 +75,7 @@ export default function EnhancedPortfolio() {
       const data = await response.json();
       
       if (data.success) {
+        console.log('Portfolio-v2 portfolio health:', data.portfolioHealth?.overallScore);
         setRecommendations(data.recommendations);
         setPortfolioHealth(data.portfolioHealth);
         setStockTheses(data.stockTheses);

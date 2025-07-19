@@ -18,11 +18,17 @@ const TradeExecutionButton: React.FC<TradeExecutionButtonProps> = ({
 }) => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [executed, setExecuted] = useState(false);
+  const [showQuantityInput, setShowQuantityInput] = useState(false);
+  const [customQuantity, setCustomQuantity] = useState(recommendation.quantity);
 
   const handleExecute = async () => {
     setIsExecuting(true);
     try {
-      await onExecute(recommendation);
+      const executeRecommendation = {
+        ...recommendation,
+        quantity: customQuantity
+      };
+      await onExecute(executeRecommendation);
       setExecuted(true);
     } catch (error) {
       console.error('Trade execution failed:', error);
@@ -56,23 +62,44 @@ const TradeExecutionButton: React.FC<TradeExecutionButtonProps> = ({
             💡 AI Recommendation
           </div>
           <div className="text-blue-800 text-sm">
-            {recommendation.action} {recommendation.quantity} shares of {recommendation.symbol}
+            {recommendation.action} {recommendation.quantity} shares of {recommendation.symbol} (suggested)
           </div>
           <div className="text-blue-600 text-xs mt-1">
             {recommendation.reasoning}
           </div>
+          {showQuantityInput && (
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-xs text-blue-700">Quantity:</label>
+              <input
+                type="number"
+                min="1"
+                value={customQuantity}
+                onChange={(e) => setCustomQuantity(parseInt(e.target.value) || 1)}
+                className="w-20 px-2 py-1 text-sm border border-blue-300 rounded"
+              />
+              <span className="text-xs text-blue-600">shares</span>
+            </div>
+          )}
         </div>
-        <button
-          onClick={handleExecute}
-          disabled={isExecuting}
-          className={`ml-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            recommendation.action === 'BUY'
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-red-600 hover:bg-red-700 text-white'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {isExecuting ? 'Executing...' : `${recommendation.action} Now`}
-        </button>
+        <div className="ml-3 flex flex-col gap-1">
+          <button
+            onClick={() => setShowQuantityInput(!showQuantityInput)}
+            className="px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-50"
+          >
+            {showQuantityInput ? 'Hide' : 'Edit Qty'}
+          </button>
+          <button
+            onClick={handleExecute}
+            disabled={isExecuting}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              recommendation.action === 'BUY'
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : 'bg-red-600 hover:bg-red-700 text-white'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isExecuting ? 'Executing...' : `${recommendation.action} ${customQuantity}`}
+          </button>
+        </div>
       </div>
     </div>
   );
