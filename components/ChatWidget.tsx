@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useChat } from '../hooks/useChat';
 import TradeExecutionButton from './TradeExecutionButton';
+import DataStatusIndicator from './DataStatusIndicator';
 
 export default function ChatWidget() {
   const { messages, loading, sendMessage } = useChat();
@@ -75,6 +76,8 @@ export default function ChatWidget() {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-semibold mb-4">Chat with Squeeze Alpha</h2>
+      
+      <DataStatusIndicator />
       
       <div className="h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 mb-4">
         {messages.length === 0 ? (

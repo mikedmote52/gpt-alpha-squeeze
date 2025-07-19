@@ -8,15 +8,35 @@ import { PortfolioHealth, AIRecommendation } from '../types/recommendations';
 
 export default function EnhancedHome() {
   const { } = usePortfolio();
-  const holdings: any[] = [];
-  const totalValue = 0;
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [totalValue, setTotalValue] = useState<number>(0);
   const [portfolioHealth, setPortfolioHealth] = useState<PortfolioHealth | null>(null);
   const [activeRecommendations, setActiveRecommendations] = useState<AIRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchQuickInsights();
+    fetchRealPortfolioData();
   }, []);
+
+  const fetchRealPortfolioData = async () => {
+    try {
+      // Fetch real positions from Alpaca
+      const positionsResponse = await fetch('/api/alpaca/positions');
+      if (positionsResponse.ok) {
+        const positions = await positionsResponse.json();
+        setHoldings(positions);
+        
+        // Calculate real total value
+        const realTotalValue = positions.reduce((sum: number, pos: any) => 
+          sum + parseFloat(pos.market_value || '0'), 0);
+        setTotalValue(realTotalValue);
+      }
+    } catch (error) {
+      console.error('Error fetching real portfolio data:', error);
+      // Don't set fake data - leave as empty
+    }
+  };
 
   const fetchQuickInsights = async () => {
     try {

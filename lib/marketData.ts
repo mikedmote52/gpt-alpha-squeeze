@@ -58,27 +58,61 @@ export async function getQuote(symbol: string) {
       }
     }
 
-    // Fallback to Alpaca
-    const alpacaUrl = `https://data.alpaca.markets/v2/stocks/${symbol}/quotes/latest`;
-    const alpacaResponse = await fetch(alpacaUrl, {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_SECRET
+    // Fallback to Yahoo Finance (free, no API key required)
+    try {
+      console.log(`Trying Yahoo Finance for ${symbol}`);
+      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+      const yahooResponse = await fetch(yahooUrl);
+      
+      if (yahooResponse.ok) {
+        const yahooData = await yahooResponse.json();
+        const result = yahooData.chart?.result?.[0];
+        const meta = result?.meta;
+        
+        if (meta) {
+          const quote = {
+            symbol,
+            price: meta.regularMarketPrice || 0,
+            change: meta.regularMarketPrice - meta.previousClose || 0,
+            changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100 || 0,
+            volume: meta.regularMarketVolume || 0,
+            timestamp: new Date().toISOString(),
+            source: 'yahoo'
+          };
+          setCachedData(cacheKey, quote);
+          return quote;
+        }
       }
-    });
+    } catch (yahooError) {
+      console.log(`Yahoo Finance failed for ${symbol}:`, yahooError);
+    }
 
-    if (alpacaResponse.ok) {
-      const alpacaData = await alpacaResponse.json();
-      const quote = {
-        symbol,
-        price: alpacaData.quote?.ap || alpacaData.quote?.bp || 0,
-        change: 0,
-        changePercent: 0,
-        volume: 0,
-        timestamp: new Date().toISOString()
-      };
-      setCachedData(cacheKey, quote);
-      return quote;
+    // Fallback to Alpaca
+    try {
+      const alpacaUrl = `https://data.alpaca.markets/v2/stocks/${symbol}/quotes/latest`;
+      const alpacaResponse = await fetch(alpacaUrl, {
+        headers: {
+          'APCA-API-KEY-ID': ALPACA_API_KEY,
+          'APCA-API-SECRET-KEY': ALPACA_SECRET
+        }
+      });
+
+      if (alpacaResponse.ok) {
+        const alpacaData = await alpacaResponse.json();
+        const quote = {
+          symbol,
+          price: alpacaData.quote?.ap || alpacaData.quote?.bp || 0,
+          change: 0,
+          changePercent: 0,
+          volume: 0,
+          timestamp: new Date().toISOString(),
+          source: 'alpaca'
+        };
+        setCachedData(cacheKey, quote);
+        return quote;
+      }
+    } catch (alpacaError) {
+      console.log(`Alpaca failed for ${symbol}:`, alpacaError);
     }
 
 
@@ -189,6 +223,160 @@ export async function getShortStats(symbol: string) {
   } catch (error) {
     console.error(`Error fetching short stats for ${symbol}:`, error);
     throw error;
+  }
+}
+
+// Reddit sentiment analysis
+export async function getRedditSentiment(symbol: string) {
+  const cacheKey = `reddit_${symbol}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Search Reddit for mentions (using free Reddit API)
+    const searchUrl = `https://www.reddit.com/search.json?q=${symbol}&sort=hot&limit=50&t=day`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'AlphaStack-Squeeze-Scanner/1.0'
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const posts = data.data?.children || [];
+      
+      let totalMentions = posts.length;
+      let bullishCount = 0;
+      let bearishCount = 0;
+      let totalUpvotes = 0;
+      
+      // Analyze sentiment from titles and basic metrics
+      posts.forEach((post: any) => {
+        const title = post.data.title?.toLowerCase() || '';
+        const score = post.data.score || 0;
+        totalUpvotes += score;
+        
+        // Simple sentiment analysis
+        const bullishWords = ['moon', 'rocket', 'squeeze', 'buy', 'hold', 'diamond', 'ape', 'bullish', 'calls'];
+        const bearishWords = ['dump', 'sell', 'puts', 'bearish', 'crash', 'drop', 'short'];
+        
+        const hasBullish = bullishWords.some(word => title.includes(word));
+        const hasBearish = bearishWords.some(word => title.includes(word));
+        
+        if (hasBullish) bullishCount++;
+        if (hasBearish) bearishCount++;
+      });
+      
+      const sentiment = {
+        symbol,
+        totalMentions,
+        bullishMentions: bullishCount,
+        bearishMentions: bearishCount,
+        totalUpvotes,
+        averageUpvotes: totalMentions > 0 ? totalUpvotes / totalMentions : 0,
+        sentimentScore: totalMentions > 0 ? (bullishCount - bearishCount) / totalMentions : 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      setCachedData(cacheKey, sentiment);
+      return sentiment;
+    }
+  } catch (error) {
+    console.error(`Error fetching Reddit sentiment for ${symbol}:`, error);
+  }
+  
+  // Return neutral sentiment if failed
+  return {
+    symbol,
+    totalMentions: 0,
+    bullishMentions: 0,
+    bearishMentions: 0,
+    totalUpvotes: 0,
+    averageUpvotes: 0,
+    sentimentScore: 0,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// YouTube mentions analysis  
+export async function getYouTubeMentions(symbol: string) {
+  const cacheKey = `youtube_${symbol}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Search YouTube using their free search (no API key needed for basic search)
+    // Note: This would require a proper YouTube API key for production use
+    // For now, return simulated structure showing what data would be available
+    
+    const mentions = {
+      symbol,
+      totalVideos: 0,
+      recentVideos: 0, // Last 24 hours
+      totalViews: 0,
+      averageViews: 0,
+      influencerMentions: 0, // Videos from channels with >10k subs
+      sentiment: 'neutral' as 'bullish' | 'bearish' | 'neutral',
+      timestamp: new Date().toISOString()
+    };
+    
+    setCachedData(cacheKey, mentions);
+    return mentions;
+  } catch (error) {
+    console.error(`Error fetching YouTube mentions for ${symbol}:`, error);
+    return {
+      symbol,
+      totalVideos: 0,
+      recentVideos: 0,
+      totalViews: 0,
+      averageViews: 0,
+      influencerMentions: 0,
+      sentiment: 'neutral' as 'bullish' | 'bearish' | 'neutral',
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// Combined social sentiment score
+export async function getSocialSentiment(symbol: string) {
+  try {
+    const [reddit, youtube] = await Promise.all([
+      getRedditSentiment(symbol),
+      getYouTubeMentions(symbol)
+    ]);
+    
+    // Calculate composite social score (0-100)
+    const redditWeight = 0.7;
+    const youtubeWeight = 0.3;
+    
+    const redditScore = Math.max(0, Math.min(100, 
+      50 + (reddit.sentimentScore * 25) + (reddit.totalMentions * 2)
+    ));
+    
+    const youtubeScore = Math.max(0, Math.min(100,
+      50 + (youtube.totalVideos * 3) + (youtube.influencerMentions * 10)
+    ));
+    
+    const compositeScore = (redditScore * redditWeight) + (youtubeScore * youtubeWeight);
+    
+    return {
+      symbol,
+      compositeScore: Math.round(compositeScore),
+      reddit,
+      youtube,
+      socialMomentum: reddit.totalMentions + youtube.recentVideos,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error(`Error calculating social sentiment for ${symbol}:`, error);
+    return {
+      symbol,
+      compositeScore: 50, // Neutral
+      reddit: { totalMentions: 0, sentimentScore: 0 },
+      youtube: { totalVideos: 0, recentVideos: 0 },
+      socialMomentum: 0,
+      timestamp: new Date().toISOString()
+    };
   }
 }
 
