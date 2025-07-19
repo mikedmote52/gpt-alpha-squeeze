@@ -1,295 +1,221 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { TrendingUp, TrendingDown, AlertTriangle, Activity, DollarSign, Target, Brain, Shield } from 'lucide-react';
+// Portfolio Health Dashboard Component
+// Displays overall portfolio health metrics and AI insights
 
-interface PortfolioMetrics {
-  totalValue: number;
-  totalPnL: number;
-  totalPnLPercent: number;
-  avgSqueezeScore: number;
-  riskScore: number;
-  diversification: number;
-  momentum: number;
-  aiConfidence: number;
-  topPerformer: string;
-  worstPerformer: string;
-  activeTracking: number;
-}
+import React from 'react';
+import { PortfolioHealth } from '../types/recommendations';
 
 interface PortfolioHealthDashboardProps {
-  positions: any[];
-  candidates: any[];
-  learningStatus: any;
+  health?: PortfolioHealth;
+  positions?: any;
+  candidates?: any;
+  learningStatus?: any;
 }
 
-export default function PortfolioHealthDashboard({ 
-  positions = [], 
-  candidates = [], 
-  learningStatus 
-}: PortfolioHealthDashboardProps) {
-  const [metrics, setMetrics] = useState<PortfolioMetrics>({
-    totalValue: 0,
-    totalPnL: 0,
-    totalPnLPercent: 0,
-    avgSqueezeScore: 0,
-    riskScore: 0,
-    diversification: 0,
-    momentum: 0,
-    aiConfidence: 0,
-    topPerformer: '',
-    worstPerformer: '',
-    activeTracking: 0
-  });
-
-  useEffect(() => {
-    calculateMetrics();
-  }, [positions, candidates, learningStatus]);
-
-  const calculateMetrics = () => {
-    if (!positions || positions.length === 0) {
-      setMetrics({
-        totalValue: 0,
-        totalPnL: 0,
-        totalPnLPercent: 0,
-        avgSqueezeScore: 0,
-        riskScore: 0,
-        diversification: 0,
-        momentum: 0,
-        aiConfidence: 0,
-        topPerformer: 'No positions',
-        worstPerformer: 'No positions',
-        activeTracking: 0
-      });
-      return;
-    }
-
-    // Calculate portfolio totals from real Alpaca data
-    const totalValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || 0), 0);
-    const totalPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || 0), 0);
-    const totalPnLPercent = totalValue > 0 ? (totalPnL / (totalValue - totalPnL)) * 100 : 0;
-
-    // Calculate average squeeze score from real market data
-    const avgSqueezeScore = candidates && candidates.length > 0 
-      ? candidates.reduce((sum, c) => sum + (c.enhanced_score || 0), 0) / candidates.length
-      : 0;
-
-    // Risk score based on position concentration
-    const maxPosition = Math.max(...positions.map(p => parseFloat(p.market_value || 0)));
-    const riskScore = totalValue > 0 ? Math.min(100, (maxPosition / totalValue) * 100) : 0;
-
-    // Diversification score (better with more positions, max at 10)
-    const diversification = Math.min(100, positions.length * 10);
-
-    // Momentum score (average of all position P&L percentages)
-    const momentum = positions.length > 0 
-      ? positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_plpc || 0), 0) / positions.length * 100
-      : 0;
-
-    // AI confidence based on learning system status
-    const aiConfidence = learningStatus?.system_learning ? 85 : 0;
-
-    // Find top and worst performers
-    const sortedPositions = [...positions].sort((a, b) => 
-      parseFloat(b.unrealized_plpc || 0) - parseFloat(a.unrealized_plpc || 0)
-    );
-    const topPerformer = sortedPositions[0]?.symbol || 'None';
-    const worstPerformer = sortedPositions[sortedPositions.length - 1]?.symbol || 'None';
-
-    // Active tracking from learning system
-    const activeTracking = learningStatus?.active_tracking || 0;
-
-    setMetrics({
-      totalValue,
-      totalPnL,
-      totalPnLPercent,
-      avgSqueezeScore,
-      riskScore,
-      diversification,
-      momentum,
-      aiConfidence,
-      topPerformer,
-      worstPerformer,
-      activeTracking
-    });
+const PortfolioHealthDashboard: React.FC<PortfolioHealthDashboardProps> = ({ health, positions, candidates, learningStatus }) => {
+  // Handle legacy prop structure or use health directly
+  const portfolioHealth = health || {
+    overallScore: 0,
+    riskScore: 100,
+    diversificationScore: 0,
+    momentumScore: 0,
+    projectedReturn: 0,
+    projectedTimeframe: 'Unknown',
+    strengths: [],
+    weaknesses: ['No data available'],
+    recommendations: [],
+    sectorExposure: []
   };
-
-  const getHealthColor = (score: number) => {
-    if (score >= 70) return 'text-green-600';
-    if (score >= 40) return 'text-yellow-600';
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    if (score >= 40) return 'text-orange-600';
     return 'text-red-600';
   };
 
-  const getHealthBadge = (score: number) => {
-    if (score >= 70) return { variant: 'default', label: 'Excellent', color: 'bg-green-100 text-green-800' };
-    if (score >= 40) return { variant: 'secondary', label: 'Good', color: 'bg-yellow-100 text-yellow-800' };
-    return { variant: 'destructive', label: 'Needs Attention', color: 'bg-red-100 text-red-800' };
+  const getScoreBackground = (score: number) => {
+    if (score >= 80) return 'bg-green-100';
+    if (score >= 60) return 'bg-yellow-100';
+    if (score >= 40) return 'bg-orange-100';
+    return 'bg-red-100';
   };
 
-  // Calculate overall portfolio health score
-  const overallHealth = Math.round(
-    (metrics.avgSqueezeScore * 0.3) +
-    ((100 - metrics.riskScore) * 0.2) +
-    (metrics.diversification * 0.15) +
-    (Math.max(0, metrics.momentum + 50) * 0.2) +
-    (metrics.aiConfidence * 0.15)
-  );
+  const CircularProgress = ({ score, label }: { score: number; label: string }) => {
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (score / 100) * circumference;
+
+    return (
+      <div className="relative">
+        <svg className="w-32 h-32 transform -rotate-90">
+          <circle
+            cx="64"
+            cy="64"
+            r={radius}
+            stroke="#e5e7eb"
+            strokeWidth="8"
+            fill="none"
+          />
+          <circle
+            cx="64"
+            cy="64"
+            r={radius}
+            stroke={score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : score >= 40 ? '#fb923c' : '#ef4444'}
+            strokeWidth="8"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-500"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={`text-3xl font-bold ${getScoreColor(score)}`}>{score}</span>
+          <span className="text-sm text-gray-600">{label}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Main Portfolio Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Portfolio Value */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${metrics.totalValue.toLocaleString()}</div>
-            <div className={`text-xs flex items-center gap-1 ${metrics.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {metrics.totalPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-              ${metrics.totalPnL.toLocaleString()} ({metrics.totalPnLPercent.toFixed(1)}%)
-            </div>
-          </CardContent>
-        </Card>
+    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Portfolio Health Dashboard</h2>
 
-        {/* Overall Health */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portfolio Health</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallHealth}/100</div>
-            <div className="flex items-center gap-2 mt-1">
-              <Progress value={overallHealth} className="flex-1" />
-              <Badge className={getHealthBadge(overallHealth).color}>
-                {getHealthBadge(overallHealth).label}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Main Score */}
+      <div className="flex justify-center mb-8">
+        <div className="text-center">
+          <div className={`text-6xl font-bold ${getScoreColor(portfolioHealth.overallScore)} mb-2`}>
+            {portfolioHealth.overallScore}
+          </div>
+          <p className="text-gray-600 text-lg">Overall Portfolio Health</p>
+          <div className={`mt-2 px-4 py-1 rounded-full inline-block ${getScoreBackground(portfolioHealth.overallScore)}`}>
+            <span className={`font-medium ${getScoreColor(portfolioHealth.overallScore)}`}>
+              {portfolioHealth.overallScore >= 80 ? 'Excellent' :
+               portfolioHealth.overallScore >= 60 ? 'Good' :
+               portfolioHealth.overallScore >= 40 ? 'Fair' : 'Needs Attention'}
+            </span>
+          </div>
+        </div>
+      </div>
 
-        {/* Squeeze Score */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Squeeze Score</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.avgSqueezeScore.toFixed(1)}/100</div>
-            <div className="flex items-center gap-2 mt-1">
-              <Progress value={metrics.avgSqueezeScore} className="flex-1" />
-              <span className={`text-xs ${getHealthColor(metrics.avgSqueezeScore)}`}>
-                {metrics.avgSqueezeScore >= 75 ? 'High' : metrics.avgSqueezeScore >= 50 ? 'Medium' : 'Low'}
+      {/* Score Breakdown */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        <div className="flex justify-center">
+          <CircularProgress score={portfolioHealth.riskScore} label="Risk Score" />
+        </div>
+        <div className="flex justify-center">
+          <CircularProgress score={portfolioHealth.diversificationScore} label="Diversification" />
+        </div>
+        <div className="flex justify-center">
+          <CircularProgress score={portfolioHealth.momentumScore} label="Momentum" />
+        </div>
+        <div className="flex justify-center">
+          <div className="text-center">
+            <div className="w-32 h-32 flex flex-col items-center justify-center bg-blue-50 rounded-full">
+              <span className="text-3xl font-bold text-blue-600">
+                {portfolioHealth.projectedReturn > 0 ? '+' : ''}{(portfolioHealth.projectedReturn * 100).toFixed(1)}%
               </span>
+              <span className="text-sm text-gray-600">Projected Return</span>
+              <span className="text-xs text-gray-500">{portfolioHealth.projectedTimeframe}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* AI Learning Status */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">AI Learning Status</CardTitle>
-            <Brain className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.aiConfidence.toFixed(0)}%</div>
-            <div className="flex items-center gap-2 mt-1">
-              <Progress value={metrics.aiConfidence} className="flex-1" />
-              <Badge className={metrics.aiConfidence >= 70 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                {metrics.aiConfidence >= 70 ? 'Active' : 'Learning'}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Detailed Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Risk Analysis */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Risk Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-muted-foreground">Concentration Risk</span>
-                  <span className={`text-xs font-medium ${metrics.riskScore <= 30 ? 'text-green-600' : metrics.riskScore <= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
-                    {metrics.riskScore.toFixed(0)}%
-                  </span>
-                </div>
-                <Progress value={metrics.riskScore} className="h-2" />
-                <div className="text-xs text-muted-foreground mt-1">
-                  {metrics.riskScore <= 30 ? 'Well diversified' : metrics.riskScore <= 60 ? 'Moderate concentration' : 'High concentration risk'}
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-muted-foreground">Diversification</span>
-                  <span className={`text-xs font-medium ${getHealthColor(metrics.diversification)}`}>
-                    {positions.length} positions
-                  </span>
-                </div>
-                <Progress value={metrics.diversification} className="h-2" />
-                <div className="text-xs text-muted-foreground mt-1">
-                  {metrics.diversification >= 70 ? 'Excellent diversification' : metrics.diversification >= 40 ? 'Good diversification' : 'Consider adding positions'}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Strengths and Weaknesses */}
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        {/* Strengths */}
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h3 className="font-bold text-green-800 mb-3 flex items-center">
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            Portfolio Strengths
+          </h3>
+          {portfolioHealth.strengths.length > 0 ? (
+            <ul className="space-y-2">
+              {portfolioHealth.strengths.map((strength, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-green-600 mr-2">•</span>
+                  <span className="text-gray-700">{strength}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-600">Building strength metrics...</p>
+          )}
+        </div>
 
-        {/* Performance Insights */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Performance Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-muted-foreground">Overall Momentum</span>
-                  <span className={`text-xs font-medium ${metrics.momentum >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {metrics.momentum.toFixed(1)}%
+        {/* Weaknesses */}
+        <div className="bg-red-50 p-4 rounded-lg">
+          <h3 className="font-bold text-red-800 mb-3 flex items-center">
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            Areas for Improvement
+          </h3>
+          {portfolioHealth.weaknesses.length > 0 ? (
+            <ul className="space-y-2">
+              {portfolioHealth.weaknesses.map((weakness, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-red-600 mr-2">•</span>
+                  <span className="text-gray-700">{weakness}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-600">No critical issues identified</p>
+          )}
+        </div>
+      </div>
+
+      {/* AI Recommendations */}
+      {portfolioHealth.recommendations.length > 0 && (
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h3 className="font-bold text-blue-800 mb-3 flex items-center">
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            AI Recommendations
+          </h3>
+          <ul className="space-y-2">
+            {portfolioHealth.recommendations.map((rec, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-600 mr-2">→</span>
+                <span className="text-gray-700">{rec}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Sector Exposure (if available) */}
+      {portfolioHealth.sectorExposure.length > 0 && (
+        <div className="mt-6">
+          <h3 className="font-bold text-gray-800 mb-3">Sector Exposure</h3>
+          <div className="space-y-2">
+            {portfolioHealth.sectorExposure.map((sector, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <span className="text-gray-700">{sector.sector}</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full ${
+                        sector.risk === 'HIGH' ? 'bg-red-500' :
+                        sector.risk === 'MEDIUM' ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${sector.percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-600 w-12 text-right">
+                    {sector.percentage.toFixed(0)}%
                   </span>
                 </div>
-                <Progress value={Math.max(0, metrics.momentum + 50)} className="h-2" />
-                <div className="text-xs text-muted-foreground mt-1">
-                  {metrics.momentum >= 5 ? 'Strong upward momentum' : metrics.momentum >= 0 ? 'Slight positive momentum' : 'Negative momentum'}
-                </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">Top Performer</div>
-                  <div className="font-medium text-green-600">{metrics.topPerformer}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Needs Attention</div>
-                  <div className="font-medium text-red-600">{metrics.worstPerformer}</div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-muted-foreground">AI Tracking</div>
-                <div className="font-medium">{metrics.activeTracking} positions actively monitored</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default PortfolioHealthDashboard;

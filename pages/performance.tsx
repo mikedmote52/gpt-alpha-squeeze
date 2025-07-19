@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import PerformanceDashboard from '../components/PerformanceDashboard';
 
 export default function PerformancePage() {
@@ -7,6 +8,14 @@ export default function PerformancePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
+        <div className="mb-6">
+          <Link 
+            href="/" 
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4"
+          >
+            ← Back to AI Command Center
+          </Link>
+        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Performance Validation System
         </h1>

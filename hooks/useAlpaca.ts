@@ -7,6 +7,8 @@ interface Position {
   cost_basis: string;
   unrealized_pl: string;
   unrealized_plpc: string;
+  current_price: string;
+  avg_entry_price: string;
 }
 
 interface OrderRequest {

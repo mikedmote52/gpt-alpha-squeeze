@@ -41,7 +41,7 @@ class ReturnCalculator {
   ): Promise<ReturnPeriod> {
     const metrics = await this.db.getPerformanceMetrics(startDate, endDate);
     
-    if (metrics.length === 0) {
+    if (!metrics || metrics.length === 0) {
       throw new Error('No performance data found for the specified period');
     }
 

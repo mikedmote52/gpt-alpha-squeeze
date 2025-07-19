@@ -114,6 +114,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     res.status(200).json(response);
   } catch (error) {
     console.error('Dashboard API error:', error);
+    
+    // Check if it's a "no data" error
+    if (error instanceof Error && error.message.includes('No performance data')) {
+      // Return empty but valid response when no data exists yet
+      const { period = '30' } = req.query;
+      const days = parseInt(period as string) || 30;
+      
+      return res.status(200).json({
+        summary: {
+          period: `${days}d`,
+          total_return: 0,
+          annualized_return: 0,
+          sharpe_ratio: 0,
+          max_drawdown: 0,
+          alpha_p_value: 0,
+          is_beating_baseline: false,
+          days_tracked: 0
+        },
+        performance_metrics: {
+          daily: [],
+          weekly: [],
+          monthly: []
+        },
+        risk_assessment: {
+          risk_grade: 'Unrated',
+          risk_score: 0,
+          var_95: 0,
+          var_99: 0,
+          beta: 0,
+          alerts: ['No trading data available for analysis']
+        },
+        alpha_test: {
+          is_significant: false,
+          p_value: 0,
+          confidence_level: 0,
+          interpretation: 'Insufficient data for alpha testing',
+          power: 0
+        },
+        recent_trades: [],
+        alerts: []
+      });
+    }
+    
     res.status(500).json({ error: 'Failed to generate performance dashboard' });
   }
 }

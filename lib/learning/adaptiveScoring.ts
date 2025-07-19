@@ -64,11 +64,11 @@ class AdaptiveScoringSystem {
         sentimentWeight: 0.05
       },
       thresholds: {
-        minShortInterest: 20.0,
-        minDaysToCover: 3.0,
-        minBorrowRate: 50.0,
-        minVolumeRatio: 2.0,
-        minScoreThreshold: 75.0
+        minShortInterest: 8.0,
+        minDaysToCover: 1.0,
+        minBorrowRate: 0.0,
+        minVolumeRatio: 1.2,
+        minScoreThreshold: 40.0
       },
       version: 1,
       performance: {

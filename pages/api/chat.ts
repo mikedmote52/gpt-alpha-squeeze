@@ -114,10 +114,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get conversation context from learning system
     const conversationContext = await learningSystem.getConversationContext(sessionId);
     
+    // Get pattern insights from learning database
+    const PatternInsights = (await import('../../lib/learning/patternInsights')).default;
+    const patternInsights = new PatternInsights();
+    const insights = await patternInsights.generatePatternInsights();
+    patternInsights.close();
+    
     // Extract potential tickers from the message
     const tickerMatches = latestUserMessage.match(/\b[A-Z]{2,5}\b/g) || [];
     const uniqueTickers = Array.from(new Set(tickerMatches));
     const isAskingAboutPortfolio = /portfolio|holdings|positions|my stocks|what do I own|current positions/i.test(latestUserMessage);
+    const isAskingForScan = /scan|screen|find|opportunities|search|discover|look for|what should I buy|recommend|suggestions|squeeze candidates|best stocks|top picks/i.test(latestUserMessage);
     
     let squeezeData = [];
     let contextAddition = '';
@@ -191,6 +198,99 @@ Use this data to provide comprehensive portfolio analysis including squeeze pote
         contextAddition = '\n\nPortfolio Status: Error accessing portfolio data. Please check API configuration.';
       }
     }
+    // If asking for scan/recommendations, perform real-time scanning
+    else if (isAskingForScan && uniqueTickers.length === 0) {
+      try {
+        console.log('Performing real-time squeeze scan...');
+        
+        // Determine scan parameters based on user message
+        let scanUniverse = 'SQUEEZE_FOCUS';
+        let minScore = 60;
+        let maxResults = 10;
+        
+        // Adjust based on user request
+        if (/comprehensive|all|everything|full/i.test(latestUserMessage)) {
+          scanUniverse = 'COMPREHENSIVE';
+          maxResults = 20;
+        } else if (/biotech|pharma|bio/i.test(latestUserMessage)) {
+          scanUniverse = 'BIOTECH';
+        } else if (/meme|reddit|social/i.test(latestUserMessage)) {
+          scanUniverse = 'MEME';
+        } else if (/clean.*energy|renewable|green|solar/i.test(latestUserMessage)) {
+          scanUniverse = 'CLEAN_ENERGY';
+        } else if (/small.*cap|russell|small/i.test(latestUserMessage)) {
+          scanUniverse = 'RUSSELL2000';
+        } else if (/large.*cap|s&p|blue.*chip/i.test(latestUserMessage)) {
+          scanUniverse = 'SP500';
+        }
+        
+        // Adjust score threshold based on user preference
+        if (/high.*quality|best|top.*tier|premium/i.test(latestUserMessage)) {
+          minScore = 75;
+        } else if (/any|all|broad|wide/i.test(latestUserMessage)) {
+          minScore = 50;
+        }
+        
+        // Perform the scan using our scanner API
+        const baseUrl = process.env.NEXTAUTH_URL || `http://${req.headers.host || 'localhost:3000'}`;
+        const scanResponse = await fetch(`${baseUrl}/api/scanner?universe=${scanUniverse}&minScore=${minScore}&maxResults=${maxResults}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (scanResponse.ok) {
+          const scanData = await scanResponse.json();
+          
+          if (scanData.success && scanData.data.top_opportunities.length > 0) {
+            const opportunities = scanData.data.top_opportunities;
+            squeezeData = opportunities;
+            
+            // Create detailed scan results
+            const scanResults = opportunities.map(opp => {
+              const score = opp.enhanced_score || opp.score || 0;
+              const recommendation = score >= 75 ? 'HIGH PRIORITY - STRONG SQUEEZE CANDIDATE' : 
+                                    score >= 60 ? 'MODERATE - MONITOR CLOSELY' : 
+                                    'LOW - WATCH FOR IMPROVEMENT';
+              
+              return `
+${opp.symbol} - Enhanced Score: ${score}/100
+- Short Interest: ${(opp.shortInterest * 100).toFixed(1)}% of float
+- Days to Cover: ${opp.daysTocover} days
+- Price: $${opp.price.toFixed(2)} (${opp.changePercent > 0 ? '+' : ''}${opp.changePercent.toFixed(2)}%)
+- Volume: ${opp.volume.toLocaleString()} shares
+- Recommendation: ${recommendation}
+- AI Analysis: ${opp.ai_reasoning || 'Standard squeeze metrics analysis'}
+- Confidence: ${opp.confidence_level || 'N/A'}%`;
+            }).join('\n\n');
+            
+            contextAddition = `\n\nREAL-TIME SQUEEZE SCAN RESULTS:
+Scan Universe: ${scanData.data.universe_info.name}
+Symbols Scanned: ${scanData.data.total_symbols_scanned}
+Opportunities Found: ${scanData.data.opportunities_found}
+Scan Duration: ${scanData.data.scan_stats.scan_duration_ms}ms
+Average Score: ${scanData.data.scan_stats.avg_score}/100
+Highest Score: ${scanData.data.scan_stats.highest_score}/100
+
+TOP SQUEEZE OPPORTUNITIES:
+${scanResults}
+
+SCANNER ANALYSIS: These are live opportunities discovered through systematic scanning of ${scanData.data.universe_info.description}. Use this data to provide specific, actionable trading recommendations with entry points, targets, and risk management.`;
+            
+            console.log(`Scanner found ${opportunities.length} opportunities with avg score ${scanData.data.scan_stats.avg_score}`);
+          } else {
+            contextAddition = `\n\nSCAN RESULTS: No high-probability squeeze opportunities found in current market scan. Market conditions may not be favorable for squeeze plays at this time. Consider monitoring for better setups or adjusting screening criteria.`;
+          }
+        } else {
+          console.error('Scanner API error:', scanResponse.status);
+          contextAddition = '\n\nSCAN STATUS: Scanner temporarily unavailable. Providing general market analysis and recommendations based on current knowledge.';
+        }
+      } catch (error) {
+        console.error('Error performing scan:', error);
+        contextAddition = '\n\nSCAN STATUS: Error accessing real-time scanner. Providing analysis based on available market data.';
+      }
+    }
     // If asking about specific tickers, analyze them
     else if (uniqueTickers.length > 0) {
       console.log('Analyzing tickers:', uniqueTickers);
@@ -230,17 +330,20 @@ Total Conversations: ${conversationContext.system_status.total_conversations}
 Total Recommendations: ${conversationContext.system_status.total_recommendations}
 Active Tracking: ${conversationContext.system_status.active_tracking_count} positions
 
-RECENT PERFORMANCE:
+RECENT PERFORMANCE HISTORY:
 ${conversationContext.recent_recommendations.slice(0, 3).map(r => 
   `${r.symbol}: ${r.recommendation_type} - ${r.outcome_type || 'tracking'} (${r.outcome_return ? (r.outcome_return * 100).toFixed(1) + '%' : 'pending'})`
 ).join('\n')}
 
-STOCK MEMORY:
+STOCK MEMORY & PATTERNS:
 ${conversationContext.stock_memories.slice(0, 5).map(s => 
   `${s.symbol}: ${s.successful_recommendations}/${s.total_recommendations} success rate, avg return: ${(s.avg_recommendation_return * 100).toFixed(1)}%`
 ).join('\n')}
 
-IMPORTANT: Use this historical context to provide personalized recommendations based on past performance and learning. Reference specific stocks you've recommended before and their outcomes.`;
+PATTERN RECOGNITION INSIGHTS:
+${insights.length > 0 ? insights.map(insight => `- ${insight}`).join('\n') : '- Learning system is building pattern recognition database...'}
+
+IMPORTANT: Reference specific learned patterns and statistics when making recommendations. Use phrases like "Based on 15 similar patterns I've tracked" and "This pattern shows 78% success rate historically" to demonstrate your learning capability.`;
 
     // Build messages for the AI
     const messages = [

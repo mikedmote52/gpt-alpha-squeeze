@@ -11,14 +11,20 @@ class PerformanceDatabase {
   }
 
   private initializeDatabase() {
-    const schemaSQL = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
-    this.db.exec(schemaSQL, (err) => {
-      if (err) {
-        console.error('Database initialization error:', err);
-      } else {
-        console.log('Performance database initialized successfully');
-      }
-    });
+    try {
+      // Use process.cwd() for Next.js compatibility
+      const schemaPath = join(process.cwd(), 'lib', 'performance', 'schema.sql');
+      const schemaSQL = readFileSync(schemaPath, 'utf8');
+      this.db.exec(schemaSQL, (err) => {
+        if (err) {
+          console.error('Database initialization error:', err);
+        } else {
+          console.log('Performance database initialized successfully');
+        }
+      });
+    } catch (error) {
+      console.error('Failed to read schema file:', error);
+    }
   }
 
   // Trade execution logging
